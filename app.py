@@ -7,7 +7,7 @@ import tempfile
 from flask_cors import CORS
 import uuid
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 app = Flask(__name__)
 CORS(app)
@@ -69,8 +69,8 @@ def register_user():
             "email": email,
             "name": full_name,
             "googleId": google_id,
-            "createdAt": datetime.utcnow().isoformat(),
-            "lastLogin": datetime.utcnow().isoformat()
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+            "lastLogin": datetime.now(timezone.utc).isoformat()
         }
         
         # Upload user info to blob storage
@@ -117,7 +117,7 @@ def login_google():
             user_info = json.loads(user_info_data.readall())
             
             # Update last login
-            user_info["lastLogin"] = datetime.utcnow().isoformat()
+            user_info["lastLogin"] = datetime.now(timezone.utc).isoformat()
             
             # Upload updated user info
             blob_client.upload_blob(
@@ -216,8 +216,8 @@ def upload_profile_picture():
 def generate_jwt_token(email):
     payload = {
         'sub': email,
-        'iat': datetime.utcnow(),
-        'exp': datetime.utcnow() + timedelta(days=1)  # Token expires in 1 day
+        'iat': datetime.now(timezone.utc),
+        'exp': datetime.now(timezone.utc) + timedelta(days=1)  # Token expires in 1 day
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
     return token
