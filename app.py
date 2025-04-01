@@ -29,8 +29,8 @@ def check_user_exists():
         return jsonify({"error": "Email parameter is required"}), 400
     
     try:
-        # Create a folder path based on user email
-        folder_path = email.replace('@', '-at-').replace('.', '-dot-') + '/'
+        # Use the actual email as the folder path
+        folder_path = email + '/'
         
         # Check if userInfo.json exists for this user
         user_info_blob = folder_path + "userInfo.json"
@@ -61,8 +61,8 @@ def register_user():
         if not email or not id_token:
             return jsonify({"error": "Email and ID token are required"}), 400
         
-        # Create a folder path based on user email
-        folder_path = email.replace('@', '-at-').replace('.', '-dot-') + '/'
+        # Use the actual email as the folder path
+        folder_path = email + '/'
         
         # Create a user info object
         user_info = {
@@ -106,8 +106,8 @@ def login_google():
         if not email or not id_token:
             return jsonify({"error": "Email and ID token are required"}), 400
         
-        # Create a folder path based on user email
-        folder_path = email.replace('@', '-at-').replace('.', '-dot-') + '/'
+        # Use the actual email as the folder path
+        folder_path = email + '/'
         
         # Check if user exists
         user_info_blob = folder_path + "userInfo.json"
@@ -178,8 +178,8 @@ def upload_profile_picture():
         if file.filename == '':
             return jsonify({"error": "No file selected"}), 400
         
-        # Create a folder path based on user email
-        folder_path = user_email.replace('@', '-at-').replace('.', '-dot-') + '/'
+        # Use the actual email as the folder path
+        folder_path = user_email + '/'
         
         # Save file to a temporary location
         temp_file = tempfile.NamedTemporaryFile(delete=False)
