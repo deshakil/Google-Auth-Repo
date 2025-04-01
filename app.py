@@ -21,6 +21,200 @@ container_client = blob_service_client.get_container_client(BLOB_CONTAINER_NAME)
 # Hardcoded JWT Secret - replace this with a strong random string in production
 JWT_SECRET = "weez-auth-secure-jwt-key-2025-04-01"  # This is a random string for demonstration
 
+# Get user details endpoint
+@app.route('/api/user-profile/<email>', methods=['GET'])
+def get_user_profile(email):
+    try:
+        # Verify the JWT token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        try:
+            # Verify the token
+            payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            # Check if token is for the requested user
+            if payload['sub'] != email:
+                return jsonify({"error": "Unauthorized access to another user's profile"}), 403
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired", "details": "Please log in again"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token", "details": "Authentication failed"}), 401
+        
+        # Use the actual email as the folder path
+        folder_path = email + '/'
+        
+        # Get user info from blob storage
+        user_info_blob = folder_path + "userInfo.json"
+        try:
+            blob_client = container_client.get_blob_client(user_info_blob)
+            user_info_data = blob_client.download_blob()
+            user_info = json.loads(user_info_data.readall())
+            
+            # Check if profile picture exists
+            profile_pic_blob = folder_path + "profilePic.png"
+            profile_pic_url = None
+            try:
+                profile_pic_client = container_client.get_blob_client(profile_pic_blob)
+                profile_pic_client.get_blob_properties()  # Will raise error if not exists
+                profile_pic_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{BLOB_CONTAINER_NAME}/{profile_pic_blob}"
+            except:
+                profile_pic_url = "https://i.pinimg.com/736x/23/a6/1f/23a61f584822b8c7dbaebdca7c96da3e.jpg"
+            
+            # Build the response with needed profile fields
+            profile_data = {
+                "email": email,
+                "full_name": user_info.get("name", ""),
+                "created_at": user_info.get("createdAt", ""),
+                "last_login": user_info.get("lastLogin", ""),
+                "profile_picture": profile_pic_url,
+                "profession": user_info.get("profession", ""),
+                "gender": user_info.get("gender", ""),
+                "bio": user_info.get("bio", ""),
+                "age": user_info.get("age", 0),
+                "email_verified": user_info.get("email_verified", False)
+            }
+            
+            return jsonify(profile_data)
+            
+        except Exception as e:
+            return jsonify({"error": "User not found or error retrieving profile", "details": str(e)}), 404
+        
+    except Exception as e:
+        print(f"Error retrieving user profile: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# Update user profile endpoint
+@app.route('/api/user-profile/<email>', methods=['PUT'])
+def update_user_profile(email):
+    try:
+        # Verify the JWT token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        try:
+            # Verify the token
+            payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            # Check if token is for the requested user
+            if payload['sub'] != email:
+                return jsonify({"error": "Unauthorized access to update another user's profile"}), 403
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired", "details": "Please log in again"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token", "details": "Authentication failed"}), 401
+        
+        # Parse update data
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Use the actual email as the folder path
+        folder_path = email + '/'
+        
+        # Get user info from blob storage
+        user_info_blob = folder_path + "userInfo.json"
+        try:
+            blob_client = container_client.get_blob_client(user_info_blob)
+            user_info_data = blob_client.download_blob()
+            user_info = json.loads(user_info_data.readall())
+            
+            # Update user info with new data
+            if 'full_name' in data:
+                user_info['name'] = data['full_name']
+            if 'profession' in data:
+                user_info['profession'] = data['profession']
+            if 'gender' in data:
+                user_info['gender'] = data['gender']
+            if 'bio' in data:
+                user_info['bio'] = data['bio']
+            if 'age' in data and isinstance(data['age'], int):
+                user_info['age'] = data['age']
+            
+            # Upload updated user info
+            blob_client.upload_blob(
+                json.dumps(user_info),
+                overwrite=True,
+                content_settings=ContentSettings(content_type='application/json')
+            )
+            
+            return jsonify({"message": "Profile updated successfully"})
+            
+        except Exception as e:
+            return jsonify({"error": "User not found or error updating profile", "details": str(e)}), 404
+        
+    except Exception as e:
+        print(f"Error updating user profile: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# Upload profile picture endpoint with email parameter
+@app.route('/api/upload-profile-pic/<email>', methods=['POST'])
+def upload_profile_pic(email):
+    try:
+        # Verify the JWT token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        try:
+            # Verify the token
+            payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            # Check if token is for the requested user
+            if payload['sub'] != email:
+                return jsonify({"error": "Unauthorized access to update another user's profile picture"}), 403
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired", "details": "Please log in again"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token", "details": "Authentication failed"}), 401
+        
+        # Check if file was uploaded
+        if 'profilePic' not in request.files:
+            return jsonify({"error": "No file uploaded", "details": "profilePic field is required"}), 400
+        
+        file = request.files['profilePic']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        # Use the actual email as the folder path
+        folder_path = email + '/'
+        
+        # Save file to a temporary location
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        file.save(temp_file.name)
+        temp_file.close()
+        
+        # Upload to Azure Blob Storage
+        profile_pic_blob = folder_path + "profilePic.png"
+        blob_client = container_client.get_blob_client(profile_pic_blob)
+        
+        with open(temp_file.name, "rb") as data:
+            blob_client.upload_blob(
+                data,
+                overwrite=True,
+                content_settings=ContentSettings(content_type='image/png')
+            )
+        
+        # Remove the temporary file
+        os.unlink(temp_file.name)
+        
+        # Get the URL of the uploaded profile picture
+        profile_pic_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{BLOB_CONTAINER_NAME}/{profile_pic_blob}"
+        
+        return jsonify({
+            "message": "Profile picture uploaded successfully",
+            "profile_picture_url": profile_pic_url
+        })
+        
+    except Exception as e:
+        print(f"Error uploading profile picture: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 # Check if user exists endpoint
 @app.route('/api/user/check', methods=['GET'])
 def check_user_exists():
